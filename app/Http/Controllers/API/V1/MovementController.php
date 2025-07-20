@@ -1,64 +1,45 @@
 <?php
 
+
 namespace App\Http\Controllers\API\V1;
 
+use App\Data\Movement\CreateMovementData;
+use App\Data\Movement\MovementFilters;
+use App\Enums\MovementType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreMovementRequest;
-use App\Services\MovementService;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Services\Contracts\MovementServiceInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/**
- * Контроллер для работы с движениями товаров.
- */
 class MovementController extends Controller
 {
-    /**
-     * Сервис для работы с движениями товаров.
-     *
-     * @var MovementService
-     */
-    private MovementService $movementService;
+    public function __construct(private MovementServiceInterface $movementService) {}
 
-    /**
-     * Конструктор контроллера.
-     *
-     * @param MovementService $movementService Сервис для работы с движениями товаров.
-     */
-    public function __construct(MovementService $movementService)
+    public function index(Request $request): JsonResponse
     {
-        $this->movementService = $movementService;
+        $filters = new MovementFilters(
+            warehouseId: $request->integer('warehouse_id'),
+            productId: $request->integer('product_id'),
+            startDate: $request->input('start_date'),
+            endDate: $request->input('end_date'),
+        );
+
+        $perPage = $request->integer('per_page', 15);
+
+        return response()->json($this->movementService->getMovements($filters, $perPage));
     }
 
-    /**
-     * Получение истории движений товаров.
-     *
-     * @param Request $request HTTP-запрос, содержащий фильтры.
-     *
-     * @return LengthAwarePaginator История движений товаров с поддержкой фильтров и пагинации.
-     */
-    public function index(Request $request)
-    {
-        $filters = $request->only(['warehouse_id', 'product_id', 'start_date', 'end_date', 'per_page']);
-
-        return $this->movementService->getMovements($filters);
-    }
-
-    /**
-     * Создание записи о движении товара.
-     *
-     * @param Request $request HTTP-запрос, содержащий данные о движении.
-     *
-     * @return JsonResponse Ответ с подтверждением или ошибкой.
-     */
     public function store(StoreMovementRequest $request): JsonResponse
     {
-        // Валидация входных данных
-        $validatedData = $request->validated();
+        $data = new CreateMovementData(
+            warehouseId: $request->input('warehouse_id'),
+            productId: $request->input('product_id'),
+            type: MovementType::from($request->input('type')),
+            quantity: $request->input('quantity')
+        );
 
-        // Создание записи о движении через сервис
-        $movement = $this->movementService->createMovement($validatedData);
+        $movement = $this->movementService->createMovement($data);
 
         return response()->json([
             'message' => 'Movement created successfully',
